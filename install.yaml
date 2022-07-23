@@ -4,7 +4,7 @@ pre_install_actions:
     # Make sure we have a ddev version that can support what we do here
   - |
     #ddev-nodisplay
-    (ddev debug capabilities | grep ddev-get-yaml-interpolation >/dev/null) || (echo "Please upgrade ddev to v1.19.4+ to support yaml interpolation" && false)
+    (ddev debug capabilities | grep config-star-yaml-merging >/dev/null) || (echo "Please upgrade ddev to v1.20.0+ to support yaml interpolation" && false)
 
   # Get PLATFORMSH_CLI_TOKEN from user if we don't have it yet
   - |
@@ -110,18 +110,14 @@ pre_install_actions:
       database:
         type: {{ regexReplaceAll "oracle-" (regexReplaceAll ":.*$" $dbtype "") "" }}
         version: {{ regexReplaceAll "^.*:" $dbtype "" }}
-
       docroot: {{ dig "web" "locations" "/" "root" "notfound" .platformapp }}
+      web_environment:
+      - "PLATFORM_MOUNTS={{ range $key, $value := .platformapp.mounts }}{{ $key }} {{ end }}"
       hooks:
         post-start:
       {{ if eq .platformapp.build.flavor "composer" }}
         - composer: install
       {{ end }}
-    
-        # Hacks to avoid failures in assumptions of scripts
-        # TODO: Explore these to see how we can get rid of them
-        - exec: 'mkdir -p .drush'
-        - exec: rm -rf tmp/cache
     
       # TODO: Separate the hooks into separate exec lines
       {{ if .platformapp.hooks.build }}
@@ -134,12 +130,18 @@ pre_install_actions:
         # platformsh deploy hooks
         - exec: '{{ trimAll "\n" .platformapp.hooks.deploy | replace "\n\n" "\n" | splitList "\n"  | join ` && ` }}'
       {{ end }}
-      EOF
 
+      {{ if .platformapp.hooks.post_deploy }}
+        # platformsh post_deploy hooks
+        - exec: '{{ trimAll "\n" .platformapp.hooks.post_deploy | replace "\n\n" "\n" | splitList "\n"  | join ` && ` }}'
+      {{ end }}
+
+      EOF
 
 project_files:
   - web-build/Dockerfile.platformsh
   - homeadditions/.bashrc.d/platformsh-environment.sh
+  - providers/platform.yaml
 
 global_files:
   - commands/web/platform
